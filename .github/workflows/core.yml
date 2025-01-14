@@ -7,11 +7,6 @@ on:
         description: 'Post to Telegram'
         required: true
         type: boolean
-  push:
-    branches: [ master ]
-    tags: [ v* ]
-  pull_request:
-  merge_group:
 
 jobs:
   build:
