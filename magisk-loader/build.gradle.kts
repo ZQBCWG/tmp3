@@ -172,148 +172,144 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
     val moduleId = "${flavorLowered}_$moduleBaseId"
     val zipFileName = "$moduleName-v$verName-$verCode-${flavorLowered}-$buildTypeLowered.zip"
 
-    val prepareMagiskFilesTask = tasks.register<Sync>("prepareMagiskFiles${variantCapped}") {
-    group = "LSPosed"
-    dependsOn(
-        "assemble$variantCapped",
-        ":app:package$buildTypeCapped",
-        ":daemon:package$buildTypeCapped",
-        ":dex2oat:externalNativeBuild${buildTypeCapped}",
-        generateWebRoot
-    )
-    into(magiskDir)
-    from("${rootProject.projectDir}/README.md")
-    from("$projectDir/magisk_module") {
-        exclude("module.prop", "customize.sh", "daemon")
-    }
-    from("$projectDir/magisk_module") {
-        include("module.prop")
-        expand(
-            "moduleId" to moduleId,
-            "versionName" to "v$verName",
-            "versionCode" to verCode,
-            "authorList" to authors,
-            "updateJson" to "https://raw.githubusercontent.com/JingMatrix/LSPosed/master/magisk-loader/update/${flavorLowered}.json",
-            "requirement" to when (flavorLowered) {
-                "zygisk" -> "Requires Magisk 26.0+ and Zygisk enabled"
-                else -> "No further requirements"
-            },
-            "api" to flavorCapped,
+    val prepareMagiskFilesTask = task<Sync>("prepareMagiskFiles$variantCapped") {
+        group = "LSPosed"
+        dependsOn(
+            "assemble$variantCapped",
+            ":app:package$buildTypeCapped",
+            ":daemon:package$buildTypeCapped",
+            ":dex2oat:externalNativeBuild${buildTypeCapped}",
+            generateWebRoot
         )
-        filter<FixCrLfFilter>("eol" to FixCrLfFilter.CrLf.newInstance("lf"))
-    }
-    from("$projectDir/magisk_module") {
-        include("customize.sh", "daemon")
-        val tokens = mapOf(
-            "FLAVOR" to flavorLowered,
-            "DEBUG" to if (buildTypeLowered == "debug") "true" else "false"
-        )
-        filter<ReplaceTokens>("tokens" to tokens)
-        filter<FixCrLfFilter>("eol" to FixCrLfFilter.CrLf.newInstance("lf"))
-    }
-    from(project(":app").tasks.getByName("package$buildTypeCapped").outputs) {
-        include("*.apk")
-        rename(".*\\.apk", "manager.apk")
-    }
-    from(project(":daemon").tasks.getByName("package$buildTypeCapped").outputs) {
-        include("*.apk")
-        rename(".*\\.apk", "daemon.apk")
-    }
-    into("lib") {
-        val libDir = variantCapped + "/strip${variantCapped}DebugSymbols"
-        from(layout.buildDirectory.dir("intermediates/stripped_native_libs/$libDir/out/lib")) {
-            include("**/liblspd.so")
+        into(magiskDir)
+        from("${rootProject.projectDir}/README.md")
+        from("$projectDir/magisk_module") {
+            exclude("module.prop", "customize.sh", "daemon")
         }
-    }
-    into("bin") {
-        from(project(":dex2oat").layout.buildDirectory.dir("intermediates/cmake/$buildTypeLowered/obj")) {
-            include("**/dex2oat")
-            include("**/liboat_hook.so")
+        from("$projectDir/magisk_module") {
+            include("module.prop")
+            expand(
+                "moduleId" to moduleId,
+                "versionName" to "v$verName",
+                "versionCode" to verCode,
+                "authorList" to authors,
+                "updateJson" to "https://raw.githubusercontent.com/JingMatrix/LSPosed/master/magisk-loader/update/${flavorLowered}.json",
+                "requirement" to when (flavorLowered) {
+                    "zygisk" -> "Requires Magisk 26.0+ and Zygisk enabled"
+                    else -> "No further requirements"
+                },
+                "api" to flavorCapped,
+            )
+            filter<FixCrLfFilter>("eol" to FixCrLfFilter.CrLf.newInstance("lf"))
         }
-    }
-    val dexOutPath = if (buildTypeLowered == "release")
-        layout.buildDirectory.dir("intermediates/dex/$variantCapped/minify${variantCapped}WithR8")
-    else
-        layout.buildDirectory.dir("intermediates/dex/$variantCapped/mergeDex$variantCapped")
-    into("framework") {
-        from(dexOutPath)
-        rename("classes.dex", "lspd.dex")
-    }
-    into("webroot") {
-        if (flavorLowered.startsWith("zygisk")) {
-            from("$projectDir/build/intermediates/generateWebRoot/dist") {
-                include("**/*.js")
-                include("**/*.html")
+        from("$projectDir/magisk_module") {
+            include("customize.sh", "daemon")
+            val tokens = mapOf(
+                "FLAVOR" to flavorLowered,
+                "DEBUG" to if (buildTypeLowered == "debug") "true" else "false"
+            )
+            filter<ReplaceTokens>("tokens" to tokens)
+            filter<FixCrLfFilter>("eol" to FixCrLfFilter.CrLf.newInstance("lf"))
+        }
+        from(project(":app").tasks.getByName("package$buildTypeCapped").outputs) {
+            include("*.apk")
+            rename(".*\\.apk", "manager.apk")
+        }
+        from(project(":daemon").tasks.getByName("package$buildTypeCapped").outputs) {
+            include("*.apk")
+            rename(".*\\.apk", "daemon.apk")
+        }
+        into("lib") {
+            val libDir = variantCapped + "/strip${variantCapped}DebugSymbols"
+            from(layout.buildDirectory.dir("intermediates/stripped_native_libs/$libDir/out/lib")) {
+                include("**/liblspd.so")
             }
         }
-    }
-    val root = magiskDir.get().asFile
-
-    doLast {
-        if (file("private_key").exists()) {
-            println("=== Guards the peace of Machikado ===")
-            val privateKey = file("private_key").readBytes()
-            val publicKey = file("public_key").readBytes()
-            val namedSpec = NamedParameterSpec("Ed25519")
-            val privKeySpec = EdECPrivateKeySpec(namedSpec, privateKey)
-            val kf = KeyFactory.getInstance("Ed25519")
-            val privKey = kf.generatePrivate(privKeySpec)
-            val sig = Signature.getInstance("Ed25519")
-
-            fun File.sha(realFile: File? = null) {
-                sig.update(this.name.toByteArray())
-                sig.update(0) // null-terminated string
-                val real = realFile ?: this
-                val buffer = ByteBuffer.allocate(8)
-                    .order(ByteOrder.LITTLE_ENDIAN)
-                    .putLong(real.length())
-                    .array()
-                sig.update(buffer)
-                real.forEachBlock { bytes, size ->
-                    sig.update(bytes, 0, size)
+        into("bin") {
+            from(project(":dex2oat").layout.buildDirectory.dir("intermediates/cmake/$buildTypeLowered/obj")) {
+                include("**/dex2oat")
+                include("**/liboat_hook.so")
+            }
+        }
+        val dexOutPath = if (buildTypeLowered == "release")
+            layout.buildDirectory.dir("intermediates/dex/$variantCapped/minify${variantCapped}WithR8")
+        else
+            layout.buildDirectory.dir("intermediates/dex/$variantCapped/mergeDex$variantCapped")
+        into("framework") {
+            from(dexOutPath)
+            rename("classes.dex", "lspd.dex")
+        }
+        into("webroot") {
+            if (flavorLowered.startsWith("zygisk")) {
+                from("$projectDir/build/intermediates/generateWebRoot/dist") {
+                    include("**/*.js")
+                    include("**/*.html")
                 }
             }
-
-            fun getSign(name: String, abi32: String, abi64: String) {
-                val set = TreeSet<Pair<File, File?>> { o1, o2 ->
-                    o1.first.path.replace("\\", "/")
-                        .compareTo(o2.first.path.replace("\\", "/"))
-                }
-                set.add(Pair(root.resolve("module.prop"), null))
-                set.add(Pair(root.resolve("sepolicy.rule"), null))
-                set.add(Pair(root.resolve("post-fs-data.sh"), null))
-                set.add(Pair(root.resolve("service.sh"), null))
-                set.add(Pair(root.resolve("mazoku"), null))
-                set.add(Pair(root.resolve("lib/libzygisk.so"), root.resolve("lib/$abi32/libzygisk.so")))
-                set.add(Pair(root.resolve("lib64/libzygisk.so"), root.resolve("lib/$abi64/libzygisk.so")))
-                set.add(Pair(root.resolve("bin/zygisk-ptrace32"), root.resolve("lib/$abi32/libzygisk_ptrace.so")))
-                set.add(Pair(root.resolve("bin/zygisk-ptrace64"), root.resolve("lib/$abi64/libzygisk_ptrace.so")))
-                set.add(Pair(root.resolve("bin/zygiskd32"), root.resolve("bin/$abi32/zygiskd")))
-                set.add(Pair(root.resolve("bin/zygiskd64"), root.resolve("bin/$abi64/zygiskd")))
-                sig.initSign(privKey)
-                set.forEach { it.first.sha(it.second) }
-                val signFile = root.resolve(name)
-                signFile.writeBytes(sig.sign())
-                signFile.appendBytes(publicKey)
-            }
-
-            getSign("machikado.arm", "armeabi-v7a", "arm64-v8a")
-            getSign("machikado.x86", "x86", "x86_64")
-        } else {
-            println("no private_key found, this build will not be signed")
-            root.resolve("machikado.arm").createNewFile()
-            root.resolve("machikado.x86").createNewFile()
         }
-        fileTree(root).visit {
-            if (isDirectory) return@visit
-            val md = MessageDigest.getInstance("SHA-256")
-            file.forEachBlock(4096) { bytes, size ->
-                md.update(bytes, 0, size)
+        val root = moduleDir.get()
+
+        doLast {
+            if (file("private_key").exists()) {
+                println("=== Guards the peace of Machikado ===")
+                val privateKey = file("private_key").readBytes()
+                val publicKey = file("public_key").readBytes()
+                val namedSpec = NamedParameterSpec("ed25519")
+                val privKeySpec = EdECPrivateKeySpec(namedSpec, privateKey)
+                val kf = KeyFactory.getInstance("ed25519")
+                val privKey = kf.generatePrivate(privKeySpec);
+                val sig = Signature.getInstance("ed25519")
+                fun File.sha(realFile: File? = null) {
+                    sig.update(this.name.toByteArray())
+                    sig.update(0) // null-terminated string
+                    val real = realFile ?: this
+                    val buffer = ByteBuffer.allocate(8)
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .putLong(real.length())
+                        .array()
+                    sig.update(buffer)
+                    real.forEachBlock { bytes, size ->
+                        sig.update(bytes, 0, size)
+                    }
+                }
+
+                fun getSign(name: String, abi32: String, abi64: String) {
+                    val set = TreeSet<Pair<File, File?>> { o1, o2 ->
+                        o1.first.path.replace("\\", "/")
+                            .compareTo(o2.first.path.replace("\\", "/"))
+                    }
+                    set.add(Pair(root.file("module.prop").asFile, null))
+                    set.add(Pair(root.file("sepolicy.rule").asFile, null))
+                    set.add(Pair(root.file("post-fs-data.sh").asFile, null))
+                    set.add(Pair(root.file("service.sh").asFile, null))
+                    set.add(Pair(root.file("mazoku").asFile, null))
+                    sig.initSign(privKey)
+                    set.forEach { it.first.sha(it.second) }
+                    val signFile = root.file(name).asFile
+                    signFile.writeBytes(sig.sign())
+                    signFile.appendBytes(publicKey)
+                }
+
+                getSign("machikado.arm", "armeabi-v7a", "arm64-v8a")
+                getSign("machikado.x86", "x86", "x86_64")
+            } else {
+                println("no private_key found, this build will not be signed")
+                root.file("machikado.arm").asFile.createNewFile()
+                root.file("machikado.x86").asFile.createNewFile()
             }
-            file("${file.path}.sha256").writeText(Hex.encodeHexString(md.digest()))
-        	}
-    	}
-	}
+            val injected = objects.newInstance<Injected>(magiskDir.get().asFile.path)
+            doLast {
+                injected.factory.fileTree().from(injected.magiskDir).visit {
+                    if (isDirectory) return@visit
+                    val md = MessageDigest.getInstance("SHA-256")
+                    file.forEachBlock(4096) { bytes, size ->
+                        md.update(bytes, 0, size)
+                    }
+                    File(file.path + ".sha256").writeText(Hex.encodeHexString(md.digest()))
+                }
+            }
+        }
+    }
     
     val zipTask = task<Zip>("zip${variantCapped}") {
         group = "LSPosed"
