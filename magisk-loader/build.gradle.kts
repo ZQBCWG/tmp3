@@ -24,17 +24,12 @@ import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.Signature
 import java.security.interfaces.EdECPrivateKey
-import org.apache.commons.codec.binary.Hex
-import org.apache.tools.ant.filters.FixCrLfFilter
-import org.apache.tools.ant.filters.ReplaceTokens
-import java.io.ByteArrayOutputStream
-import java.security.MessageDigest
 import java.security.interfaces.EdECPublicKey
 import java.security.spec.EdECPrivateKeySpec
 import java.security.spec.NamedParameterSpec
 import java.util.TreeSet
-import android.databinding.tool.ext.capitalizeUS
 import java.security.MessageDigest
+import android.databinding.tool.ext.capitalizeUS
 plugins {
     alias(libs.plugins.agp.app)
     alias(libs.plugins.lsplugin.resopt)
