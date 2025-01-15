@@ -144,7 +144,7 @@ jobs:
           COMMIT_URL: ${{ github.event.head_commit.url }}
         run: |
           if [ ! -z "${{ secrets.BOT_TOKEN }}" ]; then
-            OUTPUT="magisk-loader/release/"
+            OUTPUT="magisk-loader/"
             export riruRelease=$(find $OUTPUT -name "LSPosed-v*-riru-release.zip")
             export riruDebug=$(find $OUTPUT -name "LSPosed-v*-riru-debug.zip")
             export zygiskRelease=$(find $OUTPUT -name "LSPosed-v*-zygisk-release.zip")
