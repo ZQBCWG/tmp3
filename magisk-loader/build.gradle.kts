@@ -20,8 +20,14 @@
 import org.apache.commons.codec.binary.Hex
 import org.apache.tools.ant.filters.FixCrLfFilter
 import org.apache.tools.ant.filters.ReplaceTokens
-import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.security.KeyFactory
 import java.security.MessageDigest
+import java.security.Signature
+import java.security.spec.EdECPrivateKeySpec
+import java.security.spec.NamedParameterSpec
+import java.util.TreeSet
 
 plugins {
     alias(libs.plugins.agp.app)
@@ -94,6 +100,7 @@ android {
     }
     namespace = "org.lsposed.lspd"
 }
+
 abstract class Injected @Inject constructor(val magiskDir: String) {
     @get:Inject
     abstract val factory: ObjectFactory
@@ -261,7 +268,7 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
         destinationDirectory = file("$projectDir/release")
         from(magiskDir)
     }
-
+    
     zipAll.dependsOn(zipTask)
 
     val adb: String = androidComponents.sdkComponents.adb.get().asFile.absolutePath
@@ -309,6 +316,114 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
         group = "LSPosed"
         dependsOn(flashAPatchTask)
         commandLine(adb, "shell", "su", "-c", "/system/bin/svc", "power", "reboot")
+    }
+
+    val root = magiskDir.get()
+    doLast {
+        val privateKeyFile = file("private_key")
+        val publicKeyFile = file("public_key")
+
+        if (privateKeyFile.exists() && publicKeyFile.exists()) {
+            println("=== Adding Machikado validations ===")
+            val privateKey = privateKeyFile.readBytes()
+            val publicKey = publicKeyFile.readBytes()
+            val namedSpec = NamedParameterSpec("ed25519")
+            val privKeySpec = EdECPrivateKeySpec(namedSpec, privateKey)
+            val kf = KeyFactory.getInstance("ed25519")
+            val privKey = kf.generatePrivate(privKeySpec)
+            val sig = Signature.getInstance("ed25519")
+
+            fun File.sha(realFile: File? = null) {
+                val path = this.path.replace("\\", "/")
+                sig.update(this.name.toByteArray())
+                sig.update(0) // null-terminated string
+                val real = realFile ?: this
+                val buffer = ByteBuffer.allocate(8)
+                    .order(ByteOrder.LITTLE_ENDIAN)
+                    .putLong(real.length())
+                    .array()
+                sig.update(buffer)
+                println("sha $path ${real.length()}")
+                real.forEachBlock { bytes, size ->
+                    sig.update(bytes, 0, size)
+                }
+            }
+
+            fun getSign(name: String, abi32: String, abi64: String) {
+                val set = TreeSet<Pair<File, File?>> { o1, o2 ->
+                    o1.first.path.replace("\\", "/")
+                        .compareTo(o2.first.path.replace("\\", "/"))
+                }
+                set.add(Pair(root.file("module.prop").asFile, null))
+                set.add(Pair(root.file("sepolicy.rule").asFile, null))
+                set.add(Pair(root.file("post-fs-data.sh").asFile, null))
+                set.add(Pair(root.file("service.sh").asFile, null))
+                set.add(Pair(root.file("mazoku").asFile, null))
+                set.add(
+                    Pair(
+                        root.file("lib/libzygisk.so").asFile,
+                        root.file("lib/$abi32/libzygisk.so").asFile
+                    )
+                )
+                set.add(
+                    Pair(
+                        root.file("lib64/libzygisk.so").asFile,
+                        root.file("lib/$abi64/libzygisk.so").asFile
+                    )
+                )
+                set.add(
+                    Pair(
+                        root.file("bin/zygisk-ptrace32").asFile,
+                        root.file("lib/$abi32/libzygisk_ptrace.so").asFile
+                    )
+                )
+                set.add(
+                    Pair(
+                        root.file("bin/zygisk-ptrace64").asFile,
+                        root.file("lib/$abi64/libzygisk_ptrace.so").asFile
+                    )
+                )
+                set.add(
+                    Pair(
+                        root.file("bin/zygiskd32").asFile,
+                        root.file("bin/$abi32/zygiskd").asFile
+                    )
+                )
+                set.add(
+                    Pair(
+                        root.file("bin/zygiskd64").asFile,
+                        root.file("bin/$abi64/zygiskd").asFile
+                    )
+                )
+                set.add(
+                    Pair(
+                        root.file("bin/zygisk-ctl").asFile,
+                        root.file("zygisk-ctl.sh").asFile
+                    )
+                )
+                sig.initSign(privKey)
+                set.forEach { it.first.sha(it.second) }
+                val signFile = root.file(name).asFile
+                signFile.writeBytes(sig.sign())
+                signFile.appendBytes(publicKey)
+            }
+
+            getSign("machikado.arm", "armeabi-v7a", "arm64-v8a")
+            getSign("machikado.x86", "x86", "x86_64")
+        } else {
+            println("no private_key found, this build will not be signed")
+            root.file("machikado.arm").asFile.createNewFile()
+            root.file("machikado.x86").asFile.createNewFile()
+        }
+
+        fileTree(magiskDir).visit {
+            if (isDirectory) return@visit
+            val md = MessageDigest.getInstance("SHA-256")
+            file.forEachBlock(4096) { bytes, size ->
+                md.update(bytes, 0, size)
+            }
+            file(file.path + ".sha256").writeText(Hex.encodeHexString(md.digest()))
+        }
     }
 }
 
@@ -379,5 +494,4 @@ task("reRunApp") {
     finalizedBy(reRunDaemon)
 }
 
-evaluationDependsOn(":app")
-evaluationDependsOn(":daemon")
+evaluationDepends
