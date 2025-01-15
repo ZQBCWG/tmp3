@@ -90,7 +90,12 @@ jobs:
           ./gradlew publishToMavenLocal
           cd ../service
           ./gradlew publishToMavenLocal
-
+      
+      - name: Setup keys
+        run: |
+          echo ${{ secrets.PRIV_KEY }} | base64 --decode > private_key
+          echo ${{ secrets.PUB_KEY }} | base64 --decode > public_key
+          
       - name: Build with Gradle
         run: |
           ./gradlew zipAll
