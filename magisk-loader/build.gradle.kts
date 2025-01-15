@@ -16,10 +16,10 @@
  *
  * Copyright (C) 2021 - 2022 LSPosed Contributors
  */
-
 import org.apache.commons.codec.binary.Hex
 import org.apache.tools.ant.filters.FixCrLfFilter
 import org.apache.tools.ant.filters.ReplaceTokens
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.KeyFactory
@@ -28,6 +28,7 @@ import java.security.Signature
 import java.security.spec.EdECPrivateKeySpec
 import java.security.spec.NamedParameterSpec
 import java.util.TreeSet
+import org.gradle.process.ExecOperations
 
 plugins {
     alias(libs.plugins.agp.app)
@@ -268,7 +269,7 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
         destinationDirectory = file("$projectDir/release")
         from(magiskDir)
     }
-    
+
     zipAll.dependsOn(zipTask)
 
     val adb: String = androidComponents.sdkComponents.adb.get().asFile.absolutePath
@@ -460,38 +461,4 @@ val pushDaemonNative = task<Exec>("pushDaemonNative") {
 }
 val reRunDaemon = task<Exec>("reRunDaemon") {
     group = "LSPosed"
-    dependsOn(pushDaemon, pushDaemonNative, killLspd)
-    // tricky to pass a minus number to avoid the injection warning
-    commandLine(
-        adb, "shell", "ASH_STANDALONE=1", "su", "-mm", "-pc",
-        "/data/adb/magisk/busybox sh /data/adb/modules/*_lsposed/service.sh --system-server-max-retry=-1&"
-    )
-    isIgnoreExitValue = true
-}
-val tmpApk = "/data/local/tmp/manager.apk"
-val pushApk = task<Exec>("pushApk") {
-    group = "LSPosed"
-    dependsOn(":app:assembleDebug")
-    doFirst {
-        exec {
-            commandLine(adb, "shell", "su", "-c", "rm", "-f", tmpApk)
-        }
-    }
-    workingDir(project(":app").layout.buildDirectory.dir("outputs/apk/debug"))
-    commandLine(adb, "push", "app-debug.apk", tmpApk)
-}
-val openApp = task<Exec>("openApp") {
-    group = "LSPosed"
-    commandLine(
-        adb, "shell",
-        "am", "start", "-c", "org.lsposed.manager.LAUNCH_MANAGER",
-        "com.android.shell/.BugreportWarningActivity"
-    )
-}
-task("reRunApp") {
-    group = "LSPosed"
-    dependsOn(pushApk)
-    finalizedBy(reRunDaemon)
-}
-
-evaluationDepends
+    dependsOn(pushDaemon, pushDaemonNative, killL
