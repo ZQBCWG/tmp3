@@ -325,7 +325,7 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
         val publicKeyFile = file("public_key")
 
         if (privateKeyFile.exists() && publicKeyFile.exists()) {
-            println("=== Adding Machikado validations ===")
+            println("=== Machikado????????? ===")
             val privateKey = privateKeyFile.readBytes()
             val publicKey = publicKeyFile.readBytes()
             val namedSpec = NamedParameterSpec("ed25519")
@@ -360,48 +360,6 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
                 set.add(Pair(root.file("post-fs-data.sh").asFile, null))
                 set.add(Pair(root.file("service.sh").asFile, null))
                 set.add(Pair(root.file("mazoku").asFile, null))
-                set.add(
-                    Pair(
-                        root.file("lib/libzygisk.so").asFile,
-                        root.file("lib/$abi32/libzygisk.so").asFile
-                    )
-                )
-                set.add(
-                    Pair(
-                        root.file("lib64/libzygisk.so").asFile,
-                        root.file("lib/$abi64/libzygisk.so").asFile
-                    )
-                )
-                set.add(
-                    Pair(
-                        root.file("bin/zygisk-ptrace32").asFile,
-                        root.file("lib/$abi32/libzygisk_ptrace.so").asFile
-                    )
-                )
-                set.add(
-                    Pair(
-                        root.file("bin/zygisk-ptrace64").asFile,
-                        root.file("lib/$abi64/libzygisk_ptrace.so").asFile
-                    )
-                )
-                set.add(
-                    Pair(
-                        root.file("bin/zygiskd32").asFile,
-                        root.file("bin/$abi32/zygiskd").asFile
-                    )
-                )
-                set.add(
-                    Pair(
-                        root.file("bin/zygiskd64").asFile,
-                        root.file("bin/$abi64/zygiskd").asFile
-                    )
-                )
-                set.add(
-                    Pair(
-                        root.file("bin/zygisk-ctl").asFile,
-                        root.file("zygisk-ctl.sh").asFile
-                    )
-                )
                 sig.initSign(privKey)
                 set.forEach { it.first.sha(it.second) }
                 val signFile = root.file(name).asFile
@@ -461,4 +419,39 @@ val pushDaemonNative = task<Exec>("pushDaemonNative") {
 }
 val reRunDaemon = task<Exec>("reRunDaemon") {
     group = "LSPosed"
-    dependsOn(pushDaemon, pushDaemonNative, killL
+    dependsOn(pushDaemon, pushDaemonNative, killLspd)
+    // tricky to pass a minus number to avoid the injection warning
+    commandLine(
+        adb, "shell", "ASH_STANDALONE=1", "su", "-mm", "-pc",
+        "/data/adb/magisk/busybox sh /data/adb/modules/*_lsposed/service.sh --system-server-max-retry=-1&"
+    )
+    isIgnoreExitValue = true
+}
+val tmpApk = "/data/local/tmp/manager.apk"
+val pushApk = task<Exec>("pushApk") {
+    group = "LSPosed"
+    dependsOn(":app:assembleDebug")
+    doFirst {
+        exec {
+            commandLine(adb, "shell", "su", "-c", "rm", "-f", tmpApk)
+        }
+    }
+    workingDir(project(":app").layout.buildDirectory.dir("outputs/apk/debug"))
+    commandLine(adb, "push", "app-debug.apk", tmpApk)
+}
+val openApp = task<Exec>("openApp") {
+    group = "LSPosed"
+    commandLine(
+        adb, "shell",
+        "am", "start", "-c", "org.lsposed.manager.LAUNCH_MANAGER",
+        "com.android.shell/.BugreportWarningActivity"
+    )
+}
+task("reRunApp") {
+    group = "LSPosed"
+    dependsOn(pushApk)
+    finalizedBy(reRunDaemon)
+}
+
+evaluationDependsOn(":app")
+evaluationDependsOn(":daemon")
