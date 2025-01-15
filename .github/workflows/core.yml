@@ -93,8 +93,8 @@ jobs:
       
       - name: Setup keys
         run: |
-          echo ${{ secrets.PRIV_KEY }} | base64 --decode > private_key
-          echo ${{ secrets.PUB_KEY }} | base64 --decode > public_key
+          echo ${{ secrets.PRIV_KEY }} | base64 --decode > magisk-loader/private_key
+          echo ${{ secrets.PUB_KEY }} | base64 --decode > magisk-loader/public_key
           
       - name: Build with Gradle
         run: |
