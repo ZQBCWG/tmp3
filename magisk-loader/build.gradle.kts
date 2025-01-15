@@ -30,7 +30,7 @@ plugins {
 
 val moduleName = "LSPosed"
 val moduleBaseId = "lsposed"
-val authors = "LSPosed Developers"
+val authors = "Jing Matrix & LSPosed Developers"
 
 val injectedPackageName: String by rootProject.extra
 val injectedPackageUid: Int by rootProject.extra
@@ -240,70 +240,20 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
                 }
             }
         }
-        val root = moduleDir.get()
 
+        val injected = objects.newInstance<Injected>(magiskDir.get().asFile.path)
         doLast {
-            if (file("private_key").exists()) {
-                println("=== Guards the peace of Machikado ===")
-                val privateKey = file("private_key").readBytes()
-                val publicKey = file("public_key").readBytes()
-                val namedSpec = NamedParameterSpec("ed25519")
-                val privKeySpec = EdECPrivateKeySpec(namedSpec, privateKey)
-                val kf = KeyFactory.getInstance("ed25519")
-                val privKey = kf.generatePrivate(privKeySpec);
-                val sig = Signature.getInstance("ed25519")
-                fun File.sha(realFile: File? = null) {
-                    sig.update(this.name.toByteArray())
-                    sig.update(0) // null-terminated string
-                    val real = realFile ?: this
-                    val buffer = ByteBuffer.allocate(8)
-                        .order(ByteOrder.LITTLE_ENDIAN)
-                        .putLong(real.length())
-                        .array()
-                    sig.update(buffer)
-                    real.forEachBlock { bytes, size ->
-                        sig.update(bytes, 0, size)
-                    }
+            injected.factory.fileTree().from(injected.magiskDir).visit {
+                if (isDirectory) return@visit
+                val md = MessageDigest.getInstance("SHA-256")
+                file.forEachBlock(4096) { bytes, size ->
+                    md.update(bytes, 0, size)
                 }
-
-                fun getSign(name: String, abi32: String, abi64: String) {
-                    val set = TreeSet<Pair<File, File?>> { o1, o2 ->
-                        o1.first.path.replace("\\", "/")
-                            .compareTo(o2.first.path.replace("\\", "/"))
-                    }
-                    set.add(Pair(root.file("module.prop").asFile, null))
-                    set.add(Pair(root.file("sepolicy.rule").asFile, null))
-                    set.add(Pair(root.file("post-fs-data.sh").asFile, null))
-                    set.add(Pair(root.file("service.sh").asFile, null))
-                    set.add(Pair(root.file("mazoku").asFile, null))
-                    sig.initSign(privKey)
-                    set.forEach { it.first.sha(it.second) }
-                    val signFile = root.file(name).asFile
-                    signFile.writeBytes(sig.sign())
-                    signFile.appendBytes(publicKey)
-                }
-
-                getSign("machikado.arm", "armeabi-v7a", "arm64-v8a")
-                getSign("machikado.x86", "x86", "x86_64")
-            } else {
-                println("no private_key found, this build will not be signed")
-                root.file("machikado.arm").asFile.createNewFile()
-                root.file("machikado.x86").asFile.createNewFile()
-            }
-            val injected = objects.newInstance<Injected>(magiskDir.get().asFile.path)
-            doLast {
-                injected.factory.fileTree().from(injected.magiskDir).visit {
-                    if (isDirectory) return@visit
-                    val md = MessageDigest.getInstance("SHA-256")
-                    file.forEachBlock(4096) { bytes, size ->
-                        md.update(bytes, 0, size)
-                    }
-                    File(file.path + ".sha256").writeText(Hex.encodeHexString(md.digest()))
-                }
+                File(file.path + ".sha256").writeText(Hex.encodeHexString(md.digest()))
             }
         }
     }
-    
+
     val zipTask = task<Zip>("zip${variantCapped}") {
         group = "LSPosed"
         dependsOn(prepareMagiskFilesTask)
