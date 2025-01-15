@@ -287,7 +287,6 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
 		                    .compareTo(o2.first.path.replace("\\", "/"))
 		            }
 		            set.add(Pair(root.file("module.prop").asFile, null))
-		            set.add(Pair(root.file("sepolicy.rule").asFile, null))
 		            set.add(Pair(root.file("post-fs-data.sh").asFile, null))
 		            set.add(Pair(root.file("service.sh").asFile, null))
 		            set.add(Pair(root.file("mazoku").asFile, null))
@@ -301,7 +300,7 @@ fun afterEval() = android.applicationVariants.forEach { variant ->
 		        getSign("machikado.arm", "armeabi-v7a", "arm64-v8a")
 		        getSign("machikado.x86", "x86", "x86_64")
 		    } else {
-		        println("no private_key found, this build will not be signed")
+		        println("Machikado???????????: no private_key found, this build will not be signed")
 		        root.file("machikado.arm").asFile.createNewFile()
 		        root.file("machikado.x86").asFile.createNewFile()
 		    }
