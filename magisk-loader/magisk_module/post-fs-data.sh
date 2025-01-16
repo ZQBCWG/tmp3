@@ -21,4 +21,4 @@ MODDIR=${0%/*}
 
 rm -f "/data/local/tmp/daemon.apk"
 rm -f "/data/local/tmp/manager.apk"
-
+resetprop "dalvik.vm.dex2oat-flags" "--inline-max-code-units=0"

@@ -141,8 +141,6 @@ if [ "$API" -ge 29 ]; then
   sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/g" "$MODPATH/daemon.apk"
   sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/" "$MODPATH/bin/dex2oat32"
   sed -i "s/5291374ceda0aef7c5d86cd2a4f6a3ac/$DEV_PATH/" "$MODPATH/bin/dex2oat64"
-else
-  extract "$ZIPFILE" 'system.prop' "$MODPATH"
 fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
@@ -151,7 +149,7 @@ chmod 0744 "$MODPATH/daemon"
 
 if [ "$(grep_prop ro.maple.enable)" == "1" ] && [ "$FLAVOR" == "zygisk" ]; then
   ui_print "- Add ro.maple.enable=0"
-  echo "ro.maple.enable=0" >> "$MODPATH/system.prop"
+  echo "resetprop 'ro.maple.enable' '0'" >> "$MODPATH/post-fs-data.sh"
 fi
 
 ui_print "- Welcome to LSPosed!"
