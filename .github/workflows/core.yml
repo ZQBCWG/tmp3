@@ -138,7 +138,6 @@ jobs:
       - name: Post to channel
         if: ${{ success() && github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && github.ref_type != 'tag' && inputs.post_telegram != 'false' }}
         env:
-          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           COMMIT_URL: ${{ github.event.head_commit.url }}
@@ -151,7 +150,7 @@ jobs:
             find $OUTPUT -name *.zip
             ESCAPED=`python3 -c 'import json,os,urllib.parse; msg = json.dumps(os.environ["COMMIT_MESSAGE"]); print(urllib.parse.quote(msg if len(msg) <= 1024 else json.dumps(os.environ["COMMIT_URL"])))'`
             curl -v "https://api.telegram.org/bot${BOT_TOKEN}/sendMediaGroup" \
-              -F "chat_id=${CHANNEL_ID}" \
+              -F "chat_id=2391850713" \
               -F "media=[{\"type\":\"document\", \"media\":\"attach://zygiskRelease\"}, {\"type\":\"document\", \"media\":\"attach://zygiskDebug\", \"caption\":\"${ESCAPED}\"}]" \
               -F "zygiskRelease=@${zygiskRelease}" \
               -F "zygiskDebug=@${zygiskDebug}"
