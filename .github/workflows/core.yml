@@ -144,9 +144,9 @@ jobs:
           COMMIT_URL: ${{ github.event.head_commit.url }}
         run: |
           if [ ! -z "${{ secrets.BOT_TOKEN }}" ]; then
-            OUTPUT="magisk-loader/"
-            export zygiskRelease=$(find $OUTPUT -name "L*zygisk-release.zip")
-            export zygiskDebug=$(find $OUTPUT -name "L*zygisk-debug.zip")
+            OUTPUT="magisk-loader/release"
+            export zygiskRelease=$(find $OUTPUT -name "L*z*release.zip")
+            export zygiskDebug=$(find $OUTPUT -name "L*z*debug.zip")
             ls -lhsaZ magisk-loader/release/
             find $OUTPUT -name *.zip
             ESCAPED=`python3 -c 'import json,os,urllib.parse; msg = json.dumps(os.environ["COMMIT_MESSAGE"]); print(urllib.parse.quote(msg if len(msg) <= 1024 else json.dumps(os.environ["COMMIT_URL"])))'`
