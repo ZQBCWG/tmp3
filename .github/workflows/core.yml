@@ -150,7 +150,7 @@ jobs:
             find $OUTPUT -name *.zip
             ESCAPED=`python3 -c 'import json,os,urllib.parse; msg = json.dumps(os.environ["COMMIT_MESSAGE"]); print(urllib.parse.quote(msg if len(msg) <= 1024 else json.dumps(os.environ["COMMIT_URL"])))'`
             curl -v "https://api.telegram.org/bot${BOT_TOKEN}/sendMediaGroup" \
-              -F "chat_id=2391850713" \
+              -F "chat_id=@LSPosed_IT" \
               -F "media=[{\"type\":\"document\", \"media\":\"attach://zygiskRelease\"}, {\"type\":\"document\", \"media\":\"attach://zygiskDebug\", \"caption\":\"${ESCAPED}\"}]" \
               -F "zygiskRelease=@${zygiskRelease}" \
               -F "zygiskDebug=@${zygiskDebug}"
